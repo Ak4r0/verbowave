@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>VerboWave - Aprende Inglés</title>
+  
+  <!-- Configuración PWA Universal -->
+  <meta name="theme-color" content="#0a0518">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Fondo con resplandor -->
+  <div class="glow-sphere"></div>
+
+  <div class="app-container">
+    <!-- Encabezado principal -->
+    <header class="header">
+      <div class="badge" id="blockBadge">Bloque 1 / 20</div>
+      <h1 class="logo">VERBO<span>WAVE</span></h1>
+      <p class="subtitle" id="statusMessage">Modo Repetición Rítmica</p>
+      <button class="btn-outline-small" id="openMistakesBtn" style="margin-top: 12px;">📊 Ver Mis Fallos</button>
+    </header>
+
+    <!-- Tarjeta de configuración mejorada (Deslizador de velocidad) -->
+    <section class="settings-card">
+      <div class="slider-header">
+        <label for="pauseSlider">Velocidad de estudio:</label>
+        <span id="pauseValueDisplay" style="color: var(--cyan-accent); font-weight: bold;">🚶 Normal</span>
+      </div>
+      <input type="range" id="pauseSlider" min="1" max="4" step="1" value="2">
+    </section>
+
+    <!-- Visualizador de ritmo auditivo -->
+    <section class="visualizer-card" id="visualizerCard">
+      <div class="wave-container" id="waveBox">
+        <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+      </div>
+      <div class="active-verb-display">
+        <span class="active-tag" id="roundCounter">Repetición 1 de 5</span>
+        <h2 id="displayInfinitive">Go</h2>
+        <div class="verb-details">
+          <p><strong>Past:</strong> <span id="displayPast">Went</span></p>
+          <p><strong>Participle:</strong> <span id="displayParticiple">Gone</span></p>
+        </div>
+        <p class="translation" id="displayTranslation">Significado: Ir</p>
+      </div>
+    </section>
+
+    <!-- Panel de Evaluación (Quiz) -->
+    <section class="test-panel hidden" id="testPanel">
+      <div class="test-header">
+        <div class="mode-toggle">
+          <button class="mode-btn active" id="modeVoiceBtn">🎙️ Voz</button>
+          <button class="mode-btn" id="modeTextBtn">⌨️ Teclado</button>
+        </div>
+        <h3 id="testPrompt">Completa las conjugaciones de:</h3>
+        <h2 class="test-target-word" id="testWord">BE</h2>
+        <p class="test-meaning" id="testMeaning">(Ser / Estar)</p>
+      </div>
+
+      <!-- Sección de Micrófono -->
+      <div class="input-section" id="voiceInputSection">
+        <button class="mic-btn" id="micBtn" title="Presiona y habla"><span class="mic-icon">🎙️</span></button>
+        <p class="mic-status" id="micStatus">Toca el micrófono y pronuncia el pasado y participio</p>
+        <p class="feedback-preview" id="voiceFeedback">Esperando tu respuesta...</p>
+      </div>
+
+      <!-- Sección de Teclado -->
+      <div class="input-section hidden" id="textInputSection">
+        <div class="inputs-group">
+          <div class="field-container">
+            <label for="pastInput">Past Simple:</label>
+            <input type="text" id="pastInput" placeholder="Ej: went" autocomplete="off" autocorrect="off" autocapitalize="off">
+          </div>
+          <div class="field-container">
+            <label for="participleInput">Past Participle:</label>
+            <input type="text" id="participleInput" placeholder="Ej: gone" autocomplete="off" autocorrect="off" autocapitalize="off">
+          </div>
+        </div>
+        <button class="btn btn-primary check-text-btn" id="checkAnswerBtn">Comprobar Respuestas</button>
+        <p class="feedback-preview" id="textFeedback"></p>
+      </div>
+
+      <div class="manual-check-group">
+        <button class="btn btn-outline" id="showAnswerBtn">Revelar Respuesta</button>
+      </div>
+    </section>
+
+    <!-- Lista de verbos del bloque actual -->
+    <section class="verbs-list-preview" id="verbsListPreview">
+      <h3>Verbos en este grupo (mezclados):</h3>
+      <ul id="blockVerbsList"></ul>
+    </section>
+
+    <!-- Botones de control inferior -->
+    <footer class="controls-bar" style="flex-wrap: wrap;">
+      <button class="btn btn-primary" id="startAudioBtn">▶ Iniciar Ritmo</button>
+      <button class="btn btn-warning hidden" id="pauseBtn">⏸ Pausar</button>
+      <button class="btn btn-success hidden" id="resumeBtn">▶ Reanudar</button>
+      
+      <button class="btn btn-secondary hidden" id="skipToTestBtn">⏭️ Ir al Test</button>
+      <button class="btn btn-outline hidden" id="resetBlockBtn">🔄 Reiniciar</button>
+      
+      <button class="btn btn-secondary hidden" id="restartRoundBtn">Repetir Bloque</button>
+      <button class="btn btn-primary hidden" id="nextBlockBtn">Siguiente Bloque ➔</button>
+    </footer>
+  </div>
+
+  <!-- Ventana Emergente (Modal) con la lista de fallos -->
+  <div id="mistakesModal" class="modal-overlay">
+    <div class="modal-content mistakes-card">
+      <div class="mistakes-header">
+        <h3>⚠️ Verbos más fallados</h3>
+        <button class="btn-close-modal" id="closeMistakesBtn">X</button>
+      </div>
+      <ul id="mistakesList">
+        <li class="empty-notice">Aún no tienes errores registrados. ¡Buen trabajo!</li>
+      </ul>
+      <button class="btn-clear-mistakes-full" id="clearMistakesBtn" style="margin-top: 16px;">Limpiar Historial</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
