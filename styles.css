@@ -138,3 +138,48 @@ body { background-color: var(--bg-dark); color: var(--text-main); min-height: 10
 
 .btn-clear-mistakes-full { width: 100%; background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.4); color: #fb7185; padding: 10px; border-radius: 8px; font-size: 0.9rem; font-weight: bold; cursor: pointer; transition: background 0.2s; }
 .btn-clear-mistakes-full:hover { background: rgba(244, 63, 94, 0.2); }
+
+/* =========================================
+   NUEVO: Estilos para Controles de Estudio
+========================================== */
+.controles-estudio {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.btn-secundario {
+    background-color: #6366f1; /* Color moderno */
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: bold;
+    transition: background-color 0.3s;
+}
+
+.btn-secundario:hover {
+    background-color: #4f46e5;
+}
+
+.interruptor {
+    font-size: 15px;
+    color: #e2e8f0; /* Ajusta el color si tu fondo es blanco o negro */
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.interruptor input {
+    cursor: pointer;
+    width: 18px;
+    height: 18px;
+    accent-color: #6366f1;
+}

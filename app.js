@@ -1,9 +1,7 @@
 // ==========================================
-// 1. BASE DE DATOS DE VERBOS
+// 1. BASE DE DATOS DE VERBOS (Ahora usamos "let" para poder mezclarlo globalmente)
 // ==========================================
-// Hemos añadido los verbos más importantes en grupos de 5. 
-// Puedes seguir este mismo patrón para agregar todos los que desees.
-const verbGroups = [
+let verbGroups = [
   [
     { infinitive: "be", past: "was", participle: "been", meaning: "ser / estar" },
     { infinitive: "become", past: "became", participle: "become", meaning: "convertirse / llegar a ser" },
@@ -59,9 +57,7 @@ const verbGroups = [
     { infinitive: "leave", past: "left", participle: "left", meaning: "dejar / irse" },
     { infinitive: "lose", past: "lost", participle: "lost", meaning: "perder" },
     { infinitive: "make", past: "made", participle: "made", meaning: "hacer / fabricar" }
-  ]
-  // Pega esto justo debajo del último bloque del grupo "make" (asegúrate de que haya una coma antes)
-  ,
+  ],
   [
     { infinitive: "meet", past: "met", participle: "met", meaning: "conocer / reunirse" },
     { infinitive: "pay", past: "paid", participle: "paid", meaning: "pagar" },
@@ -117,8 +113,7 @@ const verbGroups = [
     { infinitive: "shake", past: "shook", participle: "shaken", meaning: "agitar / sacudir" },
     { infinitive: "shine", past: "shone", participle: "shone", meaning: "brillar" },
     { infinitive: "tear", past: "tore", participle: "torn", meaning: "rasgar / romper" }
-  ]
-  ,
+  ],
   [
     { infinitive: "beat", past: "beat", participle: "beaten", meaning: "golpear / latir" },
     { infinitive: "bend", past: "bent", participle: "bent", meaning: "doblar" },
@@ -148,6 +143,7 @@ const verbGroups = [
     { infinitive: "shrink", past: "shrank", participle: "shrunk", meaning: "encogerse" }
   ]
 ];
+
 // ==========================================
 // 2. VARIABLES Y DOM
 // ==========================================
@@ -157,13 +153,15 @@ let isPlaying = false, isPaused = false;
 let testVerbIndex = 0;
 let inputMode = 'voice';
 
-// NUEVAS VARIABLES: Contador de intentos y bloqueo
 let intentosActuales = 0; 
 let isTransitioning = false; 
 
 let verbPauseInterval = 450; 
 let speechRate = 0.85;
 let currentSessionID = 0; 
+
+// NUEVAS VARIABLES: Estado del Modo Continuo
+let modoContinuoActivado = false;
 
 const blockBadge = document.getElementById("blockBadge");
 const statusMessage = document.getElementById("statusMessage");
@@ -210,6 +208,75 @@ const participleInput = document.getElementById("participleInput");
 const checkAnswerBtn = document.getElementById("checkAnswerBtn");
 const textFeedback = document.getElementById("textFeedback");
 const showAnswerBtn = document.getElementById("showAnswerBtn");
+
+// Capturamos los nuevos controles
+const btnMezclar = document.getElementById('btn-mezclar');
+const toggleModoContinuo = document.getElementById('toggle-modo-continuo');
+
+// ==========================================
+// NUEVA LÓGICA: Controles de Estudio
+// ==========================================
+if (toggleModoContinuo) {
+  toggleModoContinuo.addEventListener('change', (e) => {
+    modoContinuoActivado = e.target.checked;
+  });
+}
+
+// ==========================================
+// ACCIÓN: MEZCLAR VERBOS (Corregido para restaurar botones)
+// ==========================================
+if (btnMezclar) {
+  btnMezclar.addEventListener('click', () => {
+    // 1. Cancelar cualquier audio en curso y anular la sesión activa
+    currentSessionID++; 
+    isPlaying = false;
+    isPaused = false;
+    window.speechSynthesis.cancel();
+
+    // 2. Ocultar los controles de audio en curso
+    finishAudioPhase();
+
+    // 3. Restaurar los botones iniciales en la barra inferior
+    startAudioBtn.classList.remove("hidden");
+    restartRoundBtn.classList.add("hidden");
+    nextBlockBtn.classList.add("hidden");
+
+    // 4. Asegurar que la vista esté en el visualizador y no en el Quiz
+    testPanel.classList.add("hidden");
+    visualizerCard.classList.remove("hidden");
+
+    // 5. Aplanar todos los verbos de todos los bloques en un solo arreglo
+    let todosLosVerbos = [];
+    verbGroups.forEach(grupo => {
+      todosLosVerbos.push(...grupo);
+    });
+
+    // 6. Mezclar de forma aleatoria con el algoritmo Fisher-Yates
+    shuffleArray(todosLosVerbos);
+
+    // 7. Volver a segmentar en bloques de 5 verbos
+    let nuevosGrupos = [];
+    for (let i = 0; i < todosLosVerbos.length; i += 5) {
+      nuevosGrupos.push(todosLosVerbos.slice(i, i + 5));
+    }
+    
+    // 8. Reasignar la base de datos y reiniciar al Bloque 1
+    verbGroups = nuevosGrupos;
+    currentGroupIndex = 0;
+
+    // 9. Actualizar la tarjeta visual con el primer verbo del nuevo bloque
+    const primerVerbo = verbGroups[0][0];
+    displayInfinitive.textContent = primerVerbo.infinitive;
+    displayPast.textContent = primerVerbo.past;
+    displayParticiple.textContent = primerVerbo.participle;
+    displayTranslation.textContent = `Significado: ${primerVerbo.meaning}`;
+    roundCounter.textContent = `Repetición 1 de ${MAX_ROUNDS}`;
+
+    // 10. Actualizar lista visual y mensaje de estado
+    renderGroupInfo();
+    statusMessage.textContent = "Verbos mezclados. ¡Listo para comenzar!";
+  });
+}
 
 // ==========================================
 // 3. CONTROL DESLIZADOR INTUITIVO
@@ -280,7 +347,7 @@ async function speakVerbSequence(verb, sessionID) {
 }
 
 // ==========================================
-// 5. CICLO DE REPRODUCCIÓN
+// 5. CICLO DE REPRODUCCIÓN (Modificado para Modo Continuo)
 // ==========================================
 function renderGroupInfo() {
   const group = verbGroups[currentGroupIndex];
@@ -339,7 +406,25 @@ async function playRhythmicCycle() {
     }
   }
   
-  if (isPlaying && mySessionID === currentSessionID) { finishAudioPhase(); iniciarTestModo(); }
+  if (isPlaying && mySessionID === currentSessionID) { 
+    finishAudioPhase(); 
+    
+    // EVALUAMOS SI EL MODO CONTINUO ESTÁ ACTIVO
+    if (modoContinuoActivado) {
+      statusMessage.textContent = "Pasando al siguiente bloque (Modo Continuo)...";
+      currentGroupIndex++;
+      
+      if (currentGroupIndex < verbGroups.length) {
+        setTimeout(() => { startNewCycle(); }, 1500); // Pequeña pausa antes de seguir
+      } else {
+        statusMessage.textContent = "¡Has completado todos los bloques en Modo Continuo!";
+        currentGroupIndex = 0; // Reinicia al primer bloque
+        restartRoundBtn.classList.remove("hidden");
+      }
+    } else {
+      iniciarTestModo(); // Flujo normal con Quiz
+    }
+  }
 }
 
 function finishAudioPhase() {
@@ -408,8 +493,8 @@ function iniciarTestModo() {
 }
 
 function cargarPreguntaTest() {
-  isTransitioning = false; // Desbloqueamos la interacción
-  intentosActuales = 0;    // Reiniciamos el contador de fallos para la nueva palabra
+  isTransitioning = false;
+  intentosActuales = 0;    
 
   const verb = verbGroups[currentGroupIndex][testVerbIndex];
   testWord.textContent = verb.infinitive.toUpperCase(); testMeaning.textContent = `(${verb.meaning})`;
@@ -424,7 +509,7 @@ function cargarPreguntaTest() {
 }
 
 function registrarAcierto(tiempoDeEspera = 1200) {
-  isTransitioning = true; // Bloqueamos para no recibir más clics o audio
+  isTransitioning = true; 
   testVerbIndex++; 
   const group = verbGroups[currentGroupIndex];
   
@@ -441,7 +526,7 @@ function registrarAcierto(tiempoDeEspera = 1200) {
 
 // Validación Teclado
 checkAnswerBtn.addEventListener("click", () => {
-  if (isTransitioning) return; // Evita clics si ya se está avanzando a otra palabra
+  if (isTransitioning) return;
   
   const currentVerb = verbGroups[currentGroupIndex][testVerbIndex];
   if (pastInput.value.trim().toLowerCase() === currentVerb.past.toLowerCase() && participleInput.value.trim().toLowerCase() === currentVerb.participle.toLowerCase()) {
@@ -453,7 +538,7 @@ checkAnswerBtn.addEventListener("click", () => {
     if (intentosActuales >= 3) {
       textFeedback.innerHTML = `¡Límite alcanzado! La respuesta era: <strong>${currentVerb.past} - ${currentVerb.participle}</strong>`;
       textFeedback.className = "feedback-preview error";
-      registrarAcierto(2500); // Avanza con una pausa más larga para que leas la respuesta
+      registrarAcierto(2500); 
     } else {
       textFeedback.innerHTML = `Incorrecto. Intento ${intentosActuales} de 3.`;
       textFeedback.className = "feedback-preview error";
@@ -467,10 +552,10 @@ showAnswerBtn.addEventListener("click", () => {
   const resp = `Pasado: ${verb.past} | Participio: ${verb.participle}`;
   inputMode === 'voice' ? voiceFeedback.textContent = resp : textFeedback.textContent = resp;
   recordMistake(verb.infinitive);
-  registrarAcierto(2500); // Si se rinde, muestra la respuesta y avanza automáticamente
+  registrarAcierto(2500);
 });
 
-// Validación por Micrófono (En tiempo real y con Levenshtein)
+// Validación por Micrófono
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition || window.mozSpeechRecognition;
 
 if (SpeechRecognition) {
@@ -526,7 +611,7 @@ if (SpeechRecognition) {
         if (intentosActuales >= 3) {
           voiceFeedback.innerHTML = `¡Límite alcanzado! La respuesta es: <strong>${verb.past} - ${verb.participle}</strong> <br><span style="font-size: 0.8em; color: #94a3b8;">Te escuché: "${transcript}"</span>`; 
           voiceFeedback.className = "feedback-preview error"; 
-          registrarAcierto(2500); // Avanza tras una pausa de 2.5s
+          registrarAcierto(2500); 
         } else {
           voiceFeedback.innerHTML = `No coincide. Intento ${intentosActuales} de 3. <br><span style="font-size: 0.8em; color: #94a3b8;">Te escuché: "${transcript}"</span>`; 
           voiceFeedback.className = "feedback-preview error"; 

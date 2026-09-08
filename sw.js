@@ -1,5 +1,5 @@
 // Nombre de la memoria caché
-const CACHE_NAME = 'verbowave-v1';
+const CACHE_NAME = 'verbowave-cache-v2';
 
 // Archivos que el celular guardará para abrir rápido
 const assets = [
