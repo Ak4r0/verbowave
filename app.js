@@ -264,10 +264,11 @@ if (toggleModoContinuo) {
 }
 
 // ==========================================
-// ACCIÓN: MEZCLAR VERBOS MANUAL (Mantenido por si se usa en HTML)
+// ACCIÓN: MEZCLAR VERBOS (Silenciosa y Segura)
 // ==========================================
 if (btnMezclar) {
   btnMezclar.addEventListener('click', () => {
+    // Apaga cualquier proceso activo para liberar el audio de iOS
     currentSessionID++;
     isPlaying = false;
     isPaused = false;
@@ -277,10 +278,10 @@ if (btnMezclar) {
     startAudioBtn.classList.remove("hidden");
     restartRoundBtn.classList.add("hidden");
     nextBlockBtn.classList.add("hidden");
-
     testPanel.classList.add("hidden");
     visualizerCard.classList.remove("hidden");
 
+    // Aplanar y mezclar toda la base de datos[cite: 2]
     let todosLosVerbos = [];
     verbGroups.forEach(grupo => {
       todosLosVerbos.push(...grupo);
@@ -296,6 +297,7 @@ if (btnMezclar) {
     verbGroups = nuevosGrupos;
     currentGroupIndex = 0;
 
+    // Mostrar el primer verbo del nuevo orden
     const primerVerbo = verbGroups[0][0];
     displayInfinitive.textContent = primerVerbo.infinitive;
     displayPast.textContent = primerVerbo.past;
@@ -304,7 +306,7 @@ if (btnMezclar) {
     roundCounter.textContent = `Repetición 1 de ${MAX_ROUNDS}`;
 
     renderGroupInfo();
-    statusMessage.textContent = "Verbos mezclados manualmente.";
+    statusMessage.textContent = "Verbos mezclados. ¡Toca iniciar ritmo o ve al Quiz!";
   });
 }
 
@@ -377,7 +379,7 @@ async function speakVerbSequence(verb, sessionID) {
 }
 
 // ==========================================
-// 5. CICLO DE REPRODUCCIÓN (Lógica directa)
+// 5. CICLO DE REPRODUCCIÓN (Lógica Local Simple)
 // ==========================================
 function renderGroupInfo() {
   const group = verbGroups[currentGroupIndex];
@@ -397,6 +399,12 @@ function shuffleArray(array) {
     const temp = array[i]; array[i] = array[j]; array[j] = temp;
   }
   return array;
+}
+
+// "Iniciar Ritmo" ahora solo mezcla internamente el bloque actual de 5 verbos para no aburrir
+async function startNewCycle() {
+  shuffleArray(verbGroups[currentGroupIndex]);
+  await playRhythmicCycle();
 }
 
 async function playRhythmicCycle() {
@@ -540,10 +548,8 @@ function iniciarTestModo() {
   statusMessage.textContent = "Evaluación de retención";
   testVerbIndex = 0;
 
-  // Apagado total de síntesis de voz para soltar el hardware
   window.speechSynthesis.cancel();
 
-  // Recreación fresca de la instancia del micrófono
   if (SpeechRecognition) {
     if (recognition) {
       try { recognition.abort(); } catch (e) { }
@@ -714,9 +720,7 @@ showAnswerBtn.addEventListener("click", () => {
 modeVoiceBtn.addEventListener("click", () => { inputMode = 'voice'; modeVoiceBtn.classList.add("active"); modeTextBtn.classList.remove("active"); voiceInputSection.classList.remove("hidden"); textInputSection.classList.add("hidden"); });
 modeTextBtn.addEventListener("click", () => { inputMode = 'text'; modeTextBtn.classList.add("active"); modeVoiceBtn.classList.remove("active"); textInputSection.classList.remove("hidden"); voiceInputSection.classList.add("hidden"); pastInput.focus(); });
 
-// ==========================================================
-// NUEVO BOTÓN "INICIAR RITMO" (Clon de Mezclar + Ejecución Automática con IF)
-// ==========================================================
+// EVENTO INICIAR RITMO (Limpio y Seguro)
 if (startAudioBtn) {
   startAudioBtn.addEventListener("click", () => {
     // 1. Audio silencioso en segundo plano para iOS
@@ -725,48 +729,15 @@ if (startAudioBtn) {
       silentAudioEl.play().catch((e) => console.log("Audio en segundo plano bloqueado", e));
     }
 
-    // 2. Limpieza idéntica al botón mezclar original
+    // 2. Limpieza de procesos
     currentSessionID++;
     isPlaying = false;
     isPaused = false;
     window.speechSynthesis.cancel();
     finishAudioPhase();
 
-    // Asegurar que la vista vuelve al estado inicial
-    startAudioBtn.classList.remove("hidden");
-    restartRoundBtn.classList.add("hidden");
-    nextBlockBtn.classList.add("hidden");
-    testPanel.classList.add("hidden");
-    visualizerCard.classList.remove("hidden");
-
-    // 3. Mezclar todos los verbos globalmente
-    let todosLosVerbos = [];
-    verbGroups.forEach(grupo => {
-      todosLosVerbos.push(...grupo);
-    });
-
-    shuffleArray(todosLosVerbos);
-
-    let nuevosGrupos = [];
-    for (let i = 0; i < todosLosVerbos.length; i += 5) {
-      nuevosGrupos.push(todosLosVerbos.slice(i, i + 5));
-    }
-
-    verbGroups = nuevosGrupos;
-    currentGroupIndex = 0;
-
-    // Actualizar tarjetas visuales
-    const primerVerbo = verbGroups[0][0];
-    displayInfinitive.textContent = primerVerbo.infinitive;
-    displayPast.textContent = primerVerbo.past;
-    displayParticiple.textContent = primerVerbo.participle;
-    displayTranslation.textContent = `Significado: ${primerVerbo.meaning}`;
-    roundCounter.textContent = `Repetición 1 de ${MAX_ROUNDS}`;
-
-    renderGroupInfo();
-
-    // 4. Iniciar automáticamente la reproducción (El programa)
-    playRhythmicCycle();
+    // 3. Iniciar solo el bloque actual sin mezclar toda la base de datos
+    startNewCycle();
   });
 }
 
