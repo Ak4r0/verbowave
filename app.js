@@ -541,7 +541,6 @@ function isCloseEnough(spokenPhrase, targetWord) {
   }
   return false;
 }
-
 // ==========================================
 // 8. EVALUACIÓN (Teclado y Micrófono con Límite de Intentos)
 // ==========================================
@@ -559,6 +558,13 @@ function cargarPreguntaTest() {
   intentosActuales = 0;
 
   window.speechSynthesis.cancel();
+
+  // Asegurar que el micrófono se apague al cambiar de palabra
+  try {
+    if (typeof recognitionInstance !== 'undefined' && recognitionInstance) {
+      recognitionInstance.abort();
+    }
+  } catch (e) { }
 
   const verb = verbGroups[currentGroupIndex][testVerbIndex];
   testWord.textContent = verb.infinitive.toUpperCase();
@@ -580,6 +586,12 @@ function registrarAcierto(tiempoDeEspera = 1200) {
   isTransitioning = true;
   testVerbIndex++;
   const group = verbGroups[currentGroupIndex];
+
+  try {
+    if (typeof recognitionInstance !== 'undefined' && recognitionInstance) {
+      recognitionInstance.abort();
+    }
+  } catch (e) { }
 
   if (testVerbIndex < group.length) {
     setTimeout(cargarPreguntaTest, tiempoDeEspera);
@@ -630,118 +642,122 @@ showAnswerBtn.addEventListener("click", () => {
 });
 
 // ==========================================
-// RECONOCIMIENTO DE VOZ (iOS STRICT GESTURE FIX)
+// RECONOCIMIENTO DE VOZ (INSTANCIA ÚNICA Y SEGURA)
 // ==========================================
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition || window.mozSpeechRecognition;
 let recognitionInstance = null;
-let isListening = false; // Candado lógico para el problema del doble toque
+let isListening = false;
 
 if (SpeechRecognition) {
+  // 1. Instanciamos UNA SOLA VEZ al cargar la página para que el navegador guarde el permiso
+  recognitionInstance = new SpeechRecognition();
+  recognitionInstance.lang = "en-US";
+  recognitionInstance.continuous = false;
+  recognitionInstance.interimResults = true;
+
+  recognitionInstance.onstart = () => {
+    isListening = true;
+    micBtn.classList.add("listening");
+    micStatus.textContent = `Escuchando... (Intento ${intentosActuales + 1} de 3)`;
+    voiceFeedback.textContent = "";
+    voiceFeedback.className = "feedback-preview";
+  };
+
+  recognitionInstance.onresult = (event) => {
+    if (isTransitioning) return;
+    let finalTranscript = '';
+    let interimTranscript = '';
+
+    for (let i = event.resultIndex; i < event.results.length; ++i) {
+      if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
+      else interimTranscript += event.results[i][0].transcript;
+    }
+
+    if (interimTranscript !== '') {
+      voiceFeedback.innerHTML = `Detectando: <span style="color: var(--cyan-accent); font-weight: bold;">${interimTranscript.toLowerCase()}</span>`;
+    }
+
+    if (finalTranscript !== '') {
+      const transcript = finalTranscript.toLowerCase();
+      const verb = verbGroups[currentGroupIndex][testVerbIndex];
+
+      const isPastCorrect = isCloseEnough(transcript, verb.past.toLowerCase());
+      const isParticipleCorrect = isCloseEnough(transcript, verb.participle.toLowerCase());
+
+      if (isPastCorrect || isParticipleCorrect) {
+        voiceFeedback.innerHTML = `¡Bien hecho! (${verb.past} - ${verb.participle})`;
+        voiceFeedback.className = "feedback-preview success";
+        isListening = false;
+        recognitionInstance.stop();
+        registrarAcierto();
+      } else {
+        intentosActuales++;
+        recordMistake(verb.infinitive);
+
+        if (intentosActuales >= 3) {
+          voiceFeedback.innerHTML = `¡Límite alcanzado! Respuesta: <strong>${verb.past} - ${verb.participle}</strong>`;
+          voiceFeedback.className = "feedback-preview error";
+          isListening = false;
+          recognitionInstance.stop();
+          registrarAcierto(2500);
+        } else {
+          voiceFeedback.innerHTML = `No coincide. Intento ${intentosActuales} de 3.`;
+          voiceFeedback.className = "feedback-preview error";
+          isListening = false;
+          recognitionInstance.stop();
+          micBtn.classList.remove("listening");
+        }
+      }
+    }
+  };
+
+  recognitionInstance.onend = () => {
+    isListening = false;
+    micBtn.classList.remove("listening");
+  };
+
+  recognitionInstance.onerror = (event) => {
+    isListening = false;
+    micBtn.classList.remove("listening");
+    if (event.error === 'no-speech') {
+      micStatus.textContent = "No detecté tu voz. Intenta de nuevo.";
+    } else {
+      micStatus.textContent = `Error: ${event.error}. Toca de nuevo.`;
+    }
+  };
+
+  // 2. Control seguro del botón
   micBtn.addEventListener("click", () => {
     if (isTransitioning) return;
+    window.speechSynthesis.cancel();
 
-    // 1. Candado de seguridad para iOS: Si ya está escuchando, un toque adicional lo aborta limpiamente.
-    // Esto evita el InvalidStateError que bloquea el micrófono por el resto de la sesión.
+    // Candado para evitar el bug del doble toque por error
     if (isListening) {
       try { recognitionInstance.abort(); } catch (e) { }
       isListening = false;
       micBtn.classList.remove("listening");
-      micStatus.textContent = "Micrófono pausado. Toca para hablar de nuevo.";
+      micStatus.textContent = "Micrófono pausado. Toca para hablar.";
       return;
     }
 
-    window.speechSynthesis.cancel();
-
-    // 2. Recrear instancia síncrona
-    recognitionInstance = new SpeechRecognition();
-    recognitionInstance.lang = "en-US";
-    recognitionInstance.continuous = false;
-    recognitionInstance.interimResults = true;
-
-    recognitionInstance.onstart = () => {
-      isListening = true;
-      micBtn.classList.add("listening");
-      micStatus.textContent = `Escuchando... (Intento ${intentosActuales + 1} de 3)`;
-      voiceFeedback.textContent = "";
-      voiceFeedback.className = "feedback-preview";
-    };
-
-    recognitionInstance.onresult = (event) => {
-      if (isTransitioning) return;
-      let finalTranscript = '';
-      let interimTranscript = '';
-
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
-        else interimTranscript += event.results[i][0].transcript;
-      }
-
-      if (interimTranscript !== '') {
-        voiceFeedback.innerHTML = `Detectando: <span style="color: var(--cyan-accent); font-weight: bold;">${interimTranscript.toLowerCase()}</span>`;
-      }
-
-      if (finalTranscript !== '') {
-        const transcript = finalTranscript.toLowerCase();
-        const verb = verbGroups[currentGroupIndex][testVerbIndex];
-
-        const isPastCorrect = isCloseEnough(transcript, verb.past.toLowerCase());
-        const isParticipleCorrect = isCloseEnough(transcript, verb.participle.toLowerCase());
-
-        if (isPastCorrect || isParticipleCorrect) {
-          voiceFeedback.innerHTML = `¡Bien hecho! (${verb.past} - ${verb.participle})`;
-          voiceFeedback.className = "feedback-preview success";
-          isListening = false;
-          recognitionInstance.stop();
-          registrarAcierto();
-        } else {
-          intentosActuales++;
-          recordMistake(verb.infinitive);
-
-          if (intentosActuales >= 3) {
-            voiceFeedback.innerHTML = `¡Límite alcanzado! Respuesta: <strong>${verb.past} - ${verb.participle}</strong>`;
-            voiceFeedback.className = "feedback-preview error";
-            isListening = false;
-            recognitionInstance.stop();
-            registrarAcierto(2500);
-          } else {
-            voiceFeedback.innerHTML = `No coincide. Intento ${intentosActuales} de 3.`;
-            voiceFeedback.className = "feedback-preview error";
-            isListening = false;
-            recognitionInstance.stop();
-            micBtn.classList.remove("listening");
-          }
-        }
-      }
-    };
-
-    recognitionInstance.onend = () => {
-      isListening = false;
-      micBtn.classList.remove("listening");
-    };
-
-    recognitionInstance.onerror = (event) => {
-      isListening = false;
-      micBtn.classList.remove("listening");
-      if (event.error === 'no-speech') {
-        micStatus.textContent = "No detecté tu voz. Intenta de nuevo.";
-      } else {
-        micStatus.textContent = `Error: ${event.error}. Toca de nuevo.`;
-      }
-    };
-
-    // 3. INICIO SÍNCRONO ESTRICTO
-    // Sin setTimeout. Safari verificará que esto ocurrió exactamente en el milisegundo del clic.
     try {
       recognitionInstance.start();
     } catch (e) {
-      isListening = false;
-      micStatus.textContent = "Error al iniciar. Toca el botón para intentarlo de nuevo.";
-      micBtn.classList.remove("listening");
+      // Si el navegador se quedó trabado internamente, lo forzamos a reiniciar
+      try {
+        recognitionInstance.abort();
+        setTimeout(() => recognitionInstance.start(), 50);
+      } catch (err) {
+        isListening = false;
+        micStatus.textContent = "Toca el botón para intentarlo de nuevo.";
+        micBtn.classList.remove("listening");
+      }
     }
   });
+
 } else {
   micBtn.disabled = true;
-  micStatus.textContent = "Micrófono no soportado.";
+  micStatus.textContent = "Micrófono no soportado en este navegador.";
 }
 // ==========================================
 // 9. EVENTOS GENERALES Y MODAL
