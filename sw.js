@@ -4,7 +4,7 @@
 // incrementa este identificador (v2, v3, v4...) para forzar
 // la actualización en todos los celulares y navegadores.
 // =======================================================
-const CACHE_NAME = 'verbowave-cache-v2';
+const CACHE_NAME = 'verbowave-cache-v3';
 
 // Lista de archivos indispensables para el modo sin conexión
 const ASSETS_TO_CACHE = [
