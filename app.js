@@ -208,10 +208,67 @@ const participleInput = document.getElementById("participleInput");
 const checkAnswerBtn = document.getElementById("checkAnswerBtn");
 const textFeedback = document.getElementById("textFeedback");
 const showAnswerBtn = document.getElementById("showAnswerBtn");
+const silentAudio = document.getElementById("silentAudio");
 
 // Capturamos los nuevos controles
 const btnMezclar = document.getElementById('btn-mezclar');
 const toggleModoContinuo = document.getElementById('toggle-modo-continuo');
+
+// ==========================================
+// MANTENER AUDIO ACTIVO EN SEGUNDO PLANO (iOS)
+// ==========================================
+
+// Busca tu evento 'startAudioBtn.addEventListener' existente y modifícalo para que inicie el audio silencioso
+startAudioBtn.addEventListener("click", () => {
+  silentAudio.play().catch(e => console.log("Audio en segundo plano bloqueado", e));
+  startNewCycle();
+});
+
+// ==========================================
+// LIMPIEZA DE CACHÉ Y PRÁCTICA DE FALLOS
+// ==========================================
+const clearCacheBtn = document.getElementById("clearCacheBtn");
+const practiceMistakesBtn = document.getElementById("practiceMistakesBtn");
+
+clearCacheBtn.addEventListener("click", () => {
+  if (confirm("¿Estás seguro de querer borrar la caché y reiniciar la app? Esto solucionará problemas pero cerrará tu sesión actual.")) {
+    if ('serviceWorker' in navigator) {
+      caches.keys().then(keys => Promise.all(keys.map(key => caches.delete(key))));
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        for (let reg of regs) reg.unregister();
+      });
+    }
+    localStorage.clear(); // Borra fallos y datos guardados
+    window.location.reload(true);
+  }
+});
+
+practiceMistakesBtn.addEventListener("click", () => {
+  const mistakes = getMistakes();
+  const keys = Object.keys(mistakes);
+
+  if (keys.length === 0) {
+    alert("No tienes fallos registrados para practicar.");
+    return;
+  }
+
+  // Aplanar todos los verbos y filtrar solo los que tienen fallos
+  let todosLosVerbos = verbGroups.flat();
+  let verbosAEstudiar = todosLosVerbos.filter(v => keys.includes(v.infinitive));
+
+  // Dividirlos en bloques de 5 nuevamente
+  let nuevosGrupos = [];
+  for (let i = 0; i < verbosAEstudiar.length; i += 5) {
+    nuevosGrupos.push(verbosAEstudiar.slice(i, i + 5));
+  }
+
+  verbGroups = nuevosGrupos;
+  currentGroupIndex = 0;
+  mistakesModal.classList.remove("show");
+
+  renderGroupInfo();
+  alert("¡Modo de práctica activado! Se han creado bloques exclusivos con los verbos que más fallas.");
+});
 
 // ==========================================
 // NUEVA LÓGICA: Controles de Estudio
@@ -485,31 +542,28 @@ function isCloseEnough(spokenPhrase, targetWord) {
   return false;
 }
 
-/// ==========================================
+// ==========================================
 // 8. EVALUACIÓN (Teclado y Micrófono con Límite de Intentos)
 // ==========================================
 
-// Declaramos 'recognition' de forma global para que las demás funciones puedan forzar su apagado en iOS
-let recognition;
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition || window.mozSpeechRecognition;
-
 function iniciarTestModo() {
-  visualizerCard.classList.add("hidden"); testPanel.classList.remove("hidden"); statusMessage.textContent = "Evaluación de retención"; testVerbIndex = 0; cargarPreguntaTest();
+  visualizerCard.classList.add("hidden");
+  testPanel.classList.remove("hidden");
+  statusMessage.textContent = "Evaluación de retención";
+  testVerbIndex = 0;
+  cargarPreguntaTest();
 }
 
 function cargarPreguntaTest() {
   isTransitioning = false;
   intentosActuales = 0;
 
-  // FIX iOS: Forzar parada de cualquier audio o micrófono que haya quedado en modo "zombi"
-  try {
-    if (recognition) {
-      recognition.abort();
-    }
-  } catch (e) { }
+  // Detener la voz sintética por si acaso quedó hablando
+  window.speechSynthesis.cancel();
 
   const verb = verbGroups[currentGroupIndex][testVerbIndex];
-  testWord.textContent = verb.infinitive.toUpperCase(); testMeaning.textContent = `(${verb.meaning})`;
+  testWord.textContent = verb.infinitive.toUpperCase();
+  testMeaning.textContent = `(${verb.meaning})`;
 
   voiceFeedback.innerHTML = "Esperando tu respuesta... <br><span style='font-size: 0.8em; color: #94a3b8;'>(Tienes 3 intentos)</span>";
   voiceFeedback.className = "feedback-preview";
@@ -517,7 +571,8 @@ function cargarPreguntaTest() {
   textFeedback.innerHTML = "Esperando tu respuesta... <br><span style='font-size: 0.8em; color: #94a3b8;'>(Tienes 3 intentos)</span>";
   textFeedback.className = "feedback-preview";
 
-  pastInput.value = ""; participleInput.value = "";
+  pastInput.value = "";
+  participleInput.value = "";
   micStatus.textContent = "Toca el micrófono y pronuncia el pasado y participio";
   micBtn.classList.remove("listening");
 }
@@ -527,20 +582,17 @@ function registrarAcierto(tiempoDeEspera = 1200) {
   testVerbIndex++;
   const group = verbGroups[currentGroupIndex];
 
-  // FIX iOS: Asegurarnos de detener la escucha inmediatamente al acertar
-  try {
-    if (recognition) {
-      recognition.stop();
-    }
-  } catch (e) { }
-
   if (testVerbIndex < group.length) {
     setTimeout(cargarPreguntaTest, tiempoDeEspera);
   } else {
     setTimeout(() => {
-      testPanel.classList.add("hidden"); visualizerCard.classList.remove("hidden"); statusMessage.textContent = "¡Felicitaciones! Has dominado este grupo.";
+      testPanel.classList.add("hidden");
+      visualizerCard.classList.remove("hidden");
+      statusMessage.textContent = "¡Felicitaciones! Has dominado este grupo.";
       restartRoundBtn.classList.remove("hidden");
-      if (currentGroupIndex < verbGroups.length - 1) { nextBlockBtn.classList.remove("hidden"); }
+      if (currentGroupIndex < verbGroups.length - 1) {
+        nextBlockBtn.classList.remove("hidden");
+      }
     }, tiempoDeEspera);
   }
 }
@@ -551,7 +603,9 @@ checkAnswerBtn.addEventListener("click", () => {
 
   const currentVerb = verbGroups[currentGroupIndex][testVerbIndex];
   if (pastInput.value.trim().toLowerCase() === currentVerb.past.toLowerCase() && participleInput.value.trim().toLowerCase() === currentVerb.participle.toLowerCase()) {
-    textFeedback.textContent = "¡Correcto! Excelente memoria."; textFeedback.className = "feedback-preview success"; registrarAcierto();
+    textFeedback.textContent = "¡Correcto! Excelente memoria.";
+    textFeedback.className = "feedback-preview success";
+    registrarAcierto();
   } else {
     intentosActuales++;
     recordMistake(currentVerb.infinitive);
@@ -576,98 +630,94 @@ showAnswerBtn.addEventListener("click", () => {
   registrarAcierto(2500);
 });
 
-// Validación por Micrófono con FIX para iOS
-if (SpeechRecognition) {
-  recognition = new SpeechRecognition();
-  recognition.lang = "en-US";
-  recognition.continuous = false;
-  recognition.interimResults = true;
+// ==========================================
+// RECONOCIMIENTO DE VOZ (iOS Anti-Freeze Fix)
+// ==========================================
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition || window.mozSpeechRecognition;
+let recognitionInstance = null; // Instancia dinámica
 
+if (SpeechRecognition) {
   micBtn.addEventListener("click", () => {
     if (isTransitioning) return;
 
-    // FIX iOS: Detener cualquier evento previo limpiamente antes de reiniciar
+    // 1. Detener la voz sintética y la instancia vieja
     window.speechSynthesis.cancel();
-    try {
-      recognition.abort();
-    } catch (e) { }
+    if (recognitionInstance) {
+      try { recognitionInstance.abort(); } catch (e) { }
+      recognitionInstance = null;
+    }
 
-    // FIX iOS: Dar 50ms al navegador para soltar los recursos antes de pedir el micrófono de nuevo
+    // 2. Dar 100ms a iOS para soltar la memoria, luego crear una instancia FRESCA
     setTimeout(() => {
+      recognitionInstance = new SpeechRecognition();
+      recognitionInstance.lang = "en-US";
+      recognitionInstance.continuous = false;
+      recognitionInstance.interimResults = true;
+
+      recognitionInstance.onresult = (event) => {
+        if (isTransitioning) return;
+        let finalTranscript = '';
+        let interimTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
+          else interimTranscript += event.results[i][0].transcript;
+        }
+
+        if (interimTranscript !== '') {
+          voiceFeedback.innerHTML = `Detectando: <span style="color: var(--cyan-accent); font-weight: bold;">${interimTranscript.toLowerCase()}</span>`;
+        }
+
+        if (finalTranscript !== '') {
+          const transcript = finalTranscript.toLowerCase();
+          const verb = verbGroups[currentGroupIndex][testVerbIndex];
+
+          const isPastCorrect = isCloseEnough(transcript, verb.past.toLowerCase());
+          const isParticipleCorrect = isCloseEnough(transcript, verb.participle.toLowerCase());
+
+          if (isPastCorrect || isParticipleCorrect) {
+            voiceFeedback.innerHTML = `¡Bien hecho! (${verb.past} - ${verb.participle})`;
+            voiceFeedback.className = "feedback-preview success";
+            recognitionInstance.stop();
+            registrarAcierto();
+          } else {
+            intentosActuales++;
+            recordMistake(verb.infinitive);
+
+            if (intentosActuales >= 3) {
+              voiceFeedback.innerHTML = `¡Límite alcanzado! Respuesta: <strong>${verb.past} - ${verb.participle}</strong>`;
+              voiceFeedback.className = "feedback-preview error";
+              recognitionInstance.stop();
+              registrarAcierto(2500);
+            } else {
+              voiceFeedback.innerHTML = `No coincide. Intento ${intentosActuales} de 3.`;
+              voiceFeedback.className = "feedback-preview error";
+              micBtn.classList.remove("listening");
+              recognitionInstance.stop(); // Cortar inmediatamente para obligar al usuario a reactivar
+            }
+          }
+        }
+      };
+
+      recognitionInstance.onend = () => micBtn.classList.remove("listening");
+      recognitionInstance.onerror = () => {
+        micBtn.classList.remove("listening");
+        micStatus.textContent = "Error o silencio. Toca de nuevo.";
+      };
+
+      // 3. Iniciar el micrófono limpio
       try {
-        recognition.start();
+        recognitionInstance.start();
         micBtn.classList.add("listening");
         micStatus.textContent = `Escuchando... (Intento ${intentosActuales + 1} de 3)`;
-        voiceFeedback.textContent = "";
-        voiceFeedback.className = "feedback-preview";
       } catch (e) {
         micStatus.textContent = "Toca el botón para intentarlo de nuevo.";
-        micBtn.classList.remove("listening");
       }
-    }, 50);
+    }, 100);
   });
-
-  recognition.onresult = (event) => {
-    if (isTransitioning) return;
-
-    let interimTranscript = '';
-    let finalTranscript = '';
-
-    for (let i = event.resultIndex; i < event.results.length; ++i) {
-      if (event.results[i].isFinal) { finalTranscript += event.results[i][0].transcript; }
-      else { interimTranscript += event.results[i][0].transcript; }
-    }
-
-    if (interimTranscript !== '') {
-      voiceFeedback.innerHTML = `Detectando: <span style="color: var(--cyan-accent); font-weight: bold; text-shadow: 0 0 8px var(--cyan-accent);">${interimTranscript.toLowerCase()}</span>`;
-    }
-
-    if (finalTranscript !== '') {
-      const transcript = finalTranscript.toLowerCase();
-      const verb = verbGroups[currentGroupIndex][testVerbIndex];
-
-      const isPastCorrect = isCloseEnough(transcript, verb.past.toLowerCase());
-      const isParticipleCorrect = isCloseEnough(transcript, verb.participle.toLowerCase());
-
-      if (isPastCorrect || isParticipleCorrect) {
-        voiceFeedback.innerHTML = `¡Bien hecho! (${verb.past} - ${verb.participle}) <br><span style="font-size: 0.8em; color: #94a3b8;">Te escuché: "${transcript}"</span>`;
-        voiceFeedback.className = "feedback-preview success";
-
-        // FIX iOS: Forzamos la detención del micrófono al acertar
-        recognition.stop();
-        registrarAcierto();
-      } else {
-        intentosActuales++;
-        recordMistake(verb.infinitive);
-
-        if (intentosActuales >= 3) {
-          voiceFeedback.innerHTML = `¡Límite alcanzado! La respuesta es: <strong>${verb.past} - ${verb.participle}</strong> <br><span style="font-size: 0.8em; color: #94a3b8;">Te escuché: "${transcript}"</span>`;
-          voiceFeedback.className = "feedback-preview error";
-
-          recognition.stop();
-          registrarAcierto(2500);
-        } else {
-          voiceFeedback.innerHTML = `No coincide. Intento ${intentosActuales} de 3. <br><span style="font-size: 0.8em; color: #94a3b8;">Te escuché: "${transcript}"</span>`;
-          voiceFeedback.className = "feedback-preview error";
-          // Mantenemos el estado de escucha apagado para que tenga que volver a tocar el botón
-          micBtn.classList.remove("listening");
-        }
-      }
-    }
-  };
-
-  // FIX iOS: Apagar estado visual de escucha si WebKit corta el micrófono
-  recognition.onend = () => {
-    micBtn.classList.remove("listening");
-  };
-
-  recognition.onerror = (event) => {
-    micBtn.classList.remove("listening");
-    if (event.error === 'no-speech') { micStatus.textContent = "No detecté tu voz. Intenta de nuevo."; }
-    else { micStatus.textContent = "Error al captar audio. Usa el teclado."; }
-  };
 } else {
-  micBtn.disabled = true; micStatus.textContent = "Micrófono no soportado en este navegador.";
+  micBtn.disabled = true;
+  micStatus.textContent = "Micrófono no soportado.";
 }
 // ==========================================
 // 9. EVENTOS GENERALES Y MODAL

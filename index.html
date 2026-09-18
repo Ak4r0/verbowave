@@ -23,10 +23,17 @@
   <div class="app-container">
     <!-- Encabezado principal -->
     <header class="header">
+      <div class="version-tag" style="position: absolute; top: 10px; right: 10px; font-size: 0.8rem; color: #94a3b8;">
+        v3.0</div>
       <div class="badge" id="blockBadge">Bloque 1 / 20</div>
       <h1 class="logo">VERBO<span>WAVE</span></h1>
       <p class="subtitle" id="statusMessage">Modo Repetición Rítmica</p>
-      <button class="btn-outline-small" id="openMistakesBtn" style="margin-top: 12px;">📊 Ver Mis Fallos</button>
+
+      <div style="display: flex; gap: 10px; justify-content: center; margin-top: 12px;">
+        <button class="btn-outline-small" id="openMistakesBtn">📊 Ver Mis Fallos</button>
+        <button class="btn-outline-small" id="clearCacheBtn" style="border-color: #ef4444; color: #ef4444;">🧹 Borrar
+          Caché</button>
+      </div>
     </header>
 
     <!-- Tarjeta de configuración mejorada (Deslizador de velocidad) -->
@@ -129,6 +136,9 @@
 
   <!-- Ventana Emergente (Modal) con la lista de fallos -->
   <div id="mistakesModal" class="modal-overlay">
+    <button class="btn-primary" id="practiceMistakesBtn" style="width: 100%; margin-top: 16px;">🎯 Practicar estos
+      fallos</button>
+    <button class="btn-clear-mistakes-full" id="clearMistakesBtn" style="margin-top: 10px;">Limpiar Historial</button>
     <div class="modal-content mistakes-card">
       <div class="mistakes-header">
         <h3>⚠️ Verbos más fallados</h3>
@@ -142,6 +152,12 @@
   </div>
 
   <script src="app.js"></script>
+
+  <!-- Hack para mantener viva la sesión de audio en iOS con pantalla bloqueada -->
+  <audio id="silentAudio" loop playsinline>
+    <source src="data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA"
+      type="audio/wav">
+  </audio>
 </body>
 
 </html>
