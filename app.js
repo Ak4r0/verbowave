@@ -729,7 +729,7 @@ startAudioBtn.addEventListener("click", () => {
 
   verbGroups = nuevosGrupos;
   currentGroupIndex = 0;
-  renderGroupInfo();
+
   // 4. Iniciar el programa automáticamente
   playRhythmicCycle();
 });
