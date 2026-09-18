@@ -541,9 +541,17 @@ function isCloseEnough(spokenPhrase, targetWord) {
   }
   return false;
 }
+Para inyectar ese "Efecto Mezclar" de limpieza profunda directamente en el flujo del test(sin que tus verbos se revuelvan), vamos a forzar la destrucción total de la memoria del micrófono(recognitionInstance = null) exactamente cuando pasas de una palabra a otra y cuando finaliza la escucha.
+
+Reemplaza por completo tu Sección 8 en app.js con este bloque.He añadido la limpieza nuclear en las funciones cargarPreguntaTest, registrarAcierto y en los eventos finales del micrófono.
+
+  JavaScript
 // ==========================================
-// 8. EVALUACIÓN (Teclado y Micrófono con Límite de Intentos)
+// 8. EVALUACIÓN (Teclado y Micrófono - Deep Reset iOS)
 // ==========================================
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition || window.mozSpeechRecognition;
+let recognitionInstance = null;
+let isListening = false;
 
 function iniciarTestModo() {
   visualizerCard.classList.add("hidden");
@@ -556,15 +564,15 @@ function iniciarTestModo() {
 function cargarPreguntaTest() {
   isTransitioning = false;
   intentosActuales = 0;
+  isListening = false;
 
   window.speechSynthesis.cancel();
 
-  // Asegurar que el micrófono se apague al cambiar de palabra
-  try {
-    if (typeof recognitionInstance !== 'undefined' && recognitionInstance) {
-      recognitionInstance.abort();
-    }
-  } catch (e) { }
+  // EL EFECTO MEZCLAR: Destruimos la instancia zombi al cambiar de palabra
+  if (recognitionInstance) {
+    try { recognitionInstance.abort(); } catch (e) { }
+    recognitionInstance = null;
+  }
 
   const verb = verbGroups[currentGroupIndex][testVerbIndex];
   testWord.textContent = verb.infinitive.toUpperCase();
@@ -585,13 +593,15 @@ function cargarPreguntaTest() {
 function registrarAcierto(tiempoDeEspera = 1200) {
   isTransitioning = true;
   testVerbIndex++;
-  const group = verbGroups[currentGroupIndex];
 
-  try {
-    if (typeof recognitionInstance !== 'undefined' && recognitionInstance) {
-      recognitionInstance.abort();
-    }
-  } catch (e) { }
+  // EL EFECTO MEZCLAR: Apagamos y vaciamos la memoria al acertar
+  if (recognitionInstance) {
+    try { recognitionInstance.abort(); } catch (e) { }
+    recognitionInstance = null;
+  }
+  isListening = false;
+
+  const group = verbGroups[currentGroupIndex];
 
   if (testVerbIndex < group.length) {
     setTimeout(cargarPreguntaTest, tiempoDeEspera);
@@ -641,24 +651,17 @@ showAnswerBtn.addEventListener("click", () => {
   registrarAcierto(2500);
 });
 
-// ==========================================
-// RECONOCIMIENTO DE VOZ (iOS NATIVE FIX)
-// ==========================================
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition || window.mozSpeechRecognition;
-let recognitionInstance = null;
-let isListening = false;
-
 if (SpeechRecognition) {
   micBtn.addEventListener("click", () => {
     if (isTransitioning) return;
 
-    // 1. Apagar cualquier audio sintético
     window.speechSynthesis.cancel();
 
-    // 2. Candado lógico: Si ya está escuchando, lo abortamos limpiamente
+    // Candado para evitar que el doble toque rompa Safari
     if (isListening) {
       if (recognitionInstance) {
         try { recognitionInstance.abort(); } catch (e) { }
+        recognitionInstance = null;
       }
       isListening = false;
       micBtn.classList.remove("listening");
@@ -666,7 +669,13 @@ if (SpeechRecognition) {
       return;
     }
 
-    // 3. LA REGLA DE ORO DE iOS: Crear la instancia DENTRO del clic, cada vez.
+    // Limpieza de seguridad antes de arrancar
+    if (recognitionInstance) {
+      try { recognitionInstance.abort(); } catch (e) { }
+      recognitionInstance = null;
+    }
+
+    // CREACIÓN DE INSTANCIA 100% LIMPIA EN CADA TOQUE
     recognitionInstance = new SpeechRecognition();
     recognitionInstance.lang = "en-US";
     recognitionInstance.continuous = false;
@@ -705,7 +714,7 @@ if (SpeechRecognition) {
           voiceFeedback.innerHTML = `¡Bien hecho! (${verb.past} - ${verb.participle})`;
           voiceFeedback.className = "feedback-preview success";
           isListening = false;
-          recognitionInstance.stop();
+          if (recognitionInstance) recognitionInstance.stop();
           registrarAcierto();
         } else {
           intentosActuales++;
@@ -715,13 +724,13 @@ if (SpeechRecognition) {
             voiceFeedback.innerHTML = `¡Límite alcanzado! Respuesta: <strong>${verb.past} - ${verb.participle}</strong>`;
             voiceFeedback.className = "feedback-preview error";
             isListening = false;
-            recognitionInstance.stop();
+            if (recognitionInstance) recognitionInstance.stop();
             registrarAcierto(2500);
           } else {
             voiceFeedback.innerHTML = `No coincide. Intento ${intentosActuales} de 3.`;
             voiceFeedback.className = "feedback-preview error";
             isListening = false;
-            recognitionInstance.stop();
+            if (recognitionInstance) recognitionInstance.stop();
             micBtn.classList.remove("listening");
           }
         }
@@ -731,11 +740,14 @@ if (SpeechRecognition) {
     recognitionInstance.onend = () => {
       isListening = false;
       micBtn.classList.remove("listening");
+      // EL EFECTO MEZCLAR: Eliminamos la instancia de Safari al concluir
+      recognitionInstance = null;
     };
 
     recognitionInstance.onerror = (event) => {
       isListening = false;
       micBtn.classList.remove("listening");
+      recognitionInstance = null;
       if (event.error === 'no-speech') {
         micStatus.textContent = "No detecté tu voz. Intenta de nuevo.";
       } else {
@@ -743,16 +755,15 @@ if (SpeechRecognition) {
       }
     };
 
-    // 4. Iniciar inmediatamente de forma síncrona
     try {
       recognitionInstance.start();
     } catch (e) {
       isListening = false;
+      recognitionInstance = null;
       micStatus.textContent = "Error al iniciar. Toca el botón de nuevo.";
       micBtn.classList.remove("listening");
     }
   });
-
 } else {
   micBtn.disabled = true;
   micStatus.textContent = "Micrófono no soportado en este navegador.";
