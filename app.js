@@ -144,7 +144,7 @@ let verbGroups = [
   ]
 ];
 
-/// ==========================================
+// ==========================================
 // 2. VARIABLES Y ELEMENTOS DEL DOM
 // ==========================================
 let currentGroupIndex = 0;
@@ -264,7 +264,7 @@ if (toggleModoContinuo) {
 }
 
 // ==========================================
-// ACCIÓN: MEZCLAR VERBOS
+// ACCIÓN: MEZCLAR VERBOS (Boton Manual Antiguo)
 // ==========================================
 if (btnMezclar) {
   btnMezclar.addEventListener('click', () => {
@@ -378,7 +378,7 @@ async function speakVerbSequence(verb, sessionID) {
 }
 
 // ==========================================
-// 5. CICLO DE REPRODUCCIÓN
+// 5. CICLO DE REPRODUCCIÓN Y MEZCLA GLOBAL
 // ==========================================
 function renderGroupInfo() {
   const group = verbGroups[currentGroupIndex];
@@ -400,8 +400,23 @@ function shuffleArray(array) {
   return array;
 }
 
+// NUEVA LÓGICA GLOBAL INTEGRADA: Mezcla todos los verbos antes de cada inicio
 async function startNewCycle() {
-  shuffleArray(verbGroups[currentGroupIndex]);
+  let todosLosVerbos = [];
+  verbGroups.forEach((grupo) => {
+    todosLosVerbos.push(...grupo);
+  });
+
+  shuffleArray(todosLosVerbos);
+
+  let nuevosGrupos = [];
+  for (let i = 0; i < todosLosVerbos.length; i += 5) {
+    nuevosGrupos.push(todosLosVerbos.slice(i, i + 5));
+  }
+
+  verbGroups = nuevosGrupos;
+  currentGroupIndex = 0;
+
   await playRhythmicCycle();
 }
 
@@ -445,7 +460,7 @@ async function playRhythmicCycle() {
       currentGroupIndex++;
 
       if (currentGroupIndex < verbGroups.length) {
-        setTimeout(() => { startNewCycle(); }, 1500);
+        setTimeout(() => { playRhythmicCycle(); }, 1500);
       } else {
         statusMessage.textContent = "¡Has completado todos los bloques en Modo Continuo!";
         currentGroupIndex = 0;
@@ -522,17 +537,14 @@ const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecogni
 let recognition = null;
 let isListening = false;
 
-// 1. EVENTO DEL BOTÓN: Ahora lee la instancia fresca que creamos al iniciar el test
 micBtn.addEventListener("click", () => {
   if (isTransitioning || !recognition) return;
 
-  // Si ya está escuchando, lo apagamos suavemente
   if (isListening) {
     recognition.stop();
     return;
   }
 
-  // Iniciamos la escucha
   try {
     recognition.start();
   } catch (e) {
@@ -549,11 +561,10 @@ function iniciarTestModo() {
   statusMessage.textContent = "Evaluación de retención";
   testVerbIndex = 0;
 
-  // Apagado total del motor de voz sintética para liberar el hardware
+  // Apagado total de síntesis de voz para soltar el hardware
   window.speechSynthesis.cancel();
 
-  // 2. EL "EFECTO MEZCLAR": Recreamos el motor de reconocimiento desde cero
-  // CADA VEZ que entras al test. Esto asegura que WebKit lo reciba 100% fresco y sin bugs.
+  // Recreación fresca de la instancia del micrófono
   if (SpeechRecognition) {
     if (recognition) {
       try { recognition.abort(); } catch (e) { }
@@ -717,23 +728,30 @@ showAnswerBtn.addEventListener("click", () => {
   recordMistake(verb.infinitive);
   registrarAcierto(2500);
 });
+
 // ==========================================
 // 9. EVENTOS GENERALES Y MODAL
 // ==========================================
 modeVoiceBtn.addEventListener("click", () => { inputMode = 'voice'; modeVoiceBtn.classList.add("active"); modeTextBtn.classList.remove("active"); voiceInputSection.classList.remove("hidden"); textInputSection.classList.add("hidden"); });
 modeTextBtn.addEventListener("click", () => { inputMode = 'text'; modeTextBtn.classList.add("active"); modeVoiceBtn.classList.remove("active"); textInputSection.classList.remove("hidden"); voiceInputSection.classList.add("hidden"); pastInput.focus(); });
 
-// Control unificado y seguro de inicio de ritmo
+// EVENTO DE INICIO UNIFICADO: Mezcla global + limpieza de audio
 startAudioBtn.addEventListener("click", () => {
+  currentSessionID++;
+  isPlaying = false;
+  isPaused = false;
+  window.speechSynthesis.cancel();
+
   const silentAudioEl = document.getElementById("silentAudio");
   if (silentAudioEl) {
-    silentAudioEl.play().catch(e => console.log("Audio en segundo plano bloqueado", e));
+    silentAudioEl.play().catch((e) => console.log("Audio en segundo plano bloqueado", e));
   }
+
   startNewCycle();
 });
 
-restartRoundBtn.addEventListener("click", () => { restartRoundBtn.classList.add("hidden"); nextBlockBtn.classList.add("hidden"); startNewCycle(); });
-nextBlockBtn.addEventListener("click", () => { currentGroupIndex++; restartRoundBtn.classList.add("hidden"); nextBlockBtn.classList.add("hidden"); startNewCycle(); });
+restartRoundBtn.addEventListener("click", () => { restartRoundBtn.classList.add("hidden"); nextBlockBtn.classList.add("hidden"); playRhythmicCycle(); });
+nextBlockBtn.addEventListener("click", () => { currentGroupIndex++; restartRoundBtn.classList.add("hidden"); nextBlockBtn.classList.add("hidden"); playRhythmicCycle(); });
 
 openMistakesBtn.addEventListener("click", () => { renderMistakes(); mistakesModal.classList.add("show"); });
 closeMistakesBtn.addEventListener("click", () => { mistakesModal.classList.remove("show"); });
