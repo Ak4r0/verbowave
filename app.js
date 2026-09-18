@@ -264,7 +264,7 @@ if (toggleModoContinuo) {
 }
 
 // ==========================================
-// ACCIÓN: MEZCLAR VERBOS (Boton Manual Antiguo)
+// ACCIÓN: MEZCLAR VERBOS MANUAL (Mantenido por si se usa en HTML)
 // ==========================================
 if (btnMezclar) {
   btnMezclar.addEventListener('click', () => {
@@ -272,7 +272,6 @@ if (btnMezclar) {
     isPlaying = false;
     isPaused = false;
     window.speechSynthesis.cancel();
-
     finishAudioPhase();
 
     startAudioBtn.classList.remove("hidden");
@@ -305,7 +304,7 @@ if (btnMezclar) {
     roundCounter.textContent = `Repetición 1 de ${MAX_ROUNDS}`;
 
     renderGroupInfo();
-    statusMessage.textContent = "Verbos mezclados. ¡Listo para comenzar!";
+    statusMessage.textContent = "Verbos mezclados manualmente.";
   });
 }
 
@@ -378,7 +377,7 @@ async function speakVerbSequence(verb, sessionID) {
 }
 
 // ==========================================
-// 5. CICLO DE REPRODUCCIÓN Y MEZCLA GLOBAL
+// 5. CICLO DE REPRODUCCIÓN (Lógica directa)
 // ==========================================
 function renderGroupInfo() {
   const group = verbGroups[currentGroupIndex];
@@ -398,26 +397,6 @@ function shuffleArray(array) {
     const temp = array[i]; array[i] = array[j]; array[j] = temp;
   }
   return array;
-}
-
-// NUEVA LÓGICA GLOBAL INTEGRADA: Mezcla todos los verbos antes de cada inicio
-async function startNewCycle() {
-  let todosLosVerbos = [];
-  verbGroups.forEach((grupo) => {
-    todosLosVerbos.push(...grupo);
-  });
-
-  shuffleArray(todosLosVerbos);
-
-  let nuevosGrupos = [];
-  for (let i = 0; i < todosLosVerbos.length; i += 5) {
-    nuevosGrupos.push(todosLosVerbos.slice(i, i + 5));
-  }
-
-  verbGroups = nuevosGrupos;
-  currentGroupIndex = 0;
-
-  await playRhythmicCycle();
 }
 
 async function playRhythmicCycle() {
@@ -531,7 +510,7 @@ function isCloseEnough(spokenPhrase, targetWord) {
 }
 
 // ==========================================
-// 8. EVALUACIÓN (Fix WebKit Audio Focus iOS)
+// 8. EVALUACIÓN (Lógica iOS Conservadora)
 // ==========================================
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition || window.mozSpeechRecognition;
 let recognition = null;
@@ -735,19 +714,58 @@ showAnswerBtn.addEventListener("click", () => {
 modeVoiceBtn.addEventListener("click", () => { inputMode = 'voice'; modeVoiceBtn.classList.add("active"); modeTextBtn.classList.remove("active"); voiceInputSection.classList.remove("hidden"); textInputSection.classList.add("hidden"); });
 modeTextBtn.addEventListener("click", () => { inputMode = 'text'; modeTextBtn.classList.add("active"); modeVoiceBtn.classList.remove("active"); textInputSection.classList.remove("hidden"); voiceInputSection.classList.add("hidden"); pastInput.focus(); });
 
-// EVENTO DE INICIO UNIFICADO: Mezcla global + limpieza de audio
+// ==========================================================
+// NUEVO BOTÓN "INICIAR RITMO" (Clon de Mezclar + Ejecución Automática)
+// ==========================================================
 startAudioBtn.addEventListener("click", () => {
-  currentSessionID++;
-  isPlaying = false;
-  isPaused = false;
-  window.speechSynthesis.cancel();
-
+  // 1. Audio silencioso en segundo plano para iOS
   const silentAudioEl = document.getElementById("silentAudio");
   if (silentAudioEl) {
     silentAudioEl.play().catch((e) => console.log("Audio en segundo plano bloqueado", e));
   }
 
-  startNewCycle();
+  // 2. Limpieza idéntica al botón mezclar original
+  currentSessionID++;
+  isPlaying = false;
+  isPaused = false;
+  window.speechSynthesis.cancel();
+  finishAudioPhase();
+
+  // Asegurar que la vista vuelve al estado inicial
+  startAudioBtn.classList.remove("hidden");
+  restartRoundBtn.classList.add("hidden");
+  nextBlockBtn.classList.add("hidden");
+  testPanel.classList.add("hidden");
+  visualizerCard.classList.remove("hidden");
+
+  // 3. Mezclar todos los verbos globalmente
+  let todosLosVerbos = [];
+  verbGroups.forEach(grupo => {
+    todosLosVerbos.push(...grupo);
+  });
+
+  shuffleArray(todosLosVerbos);
+
+  let nuevosGrupos = [];
+  for (let i = 0; i < todosLosVerbos.length; i += 5) {
+    nuevosGrupos.push(todosLosVerbos.slice(i, i + 5));
+  }
+
+  verbGroups = nuevosGrupos;
+  currentGroupIndex = 0;
+
+  // Actualizar tarjetas visuales
+  const primerVerbo = verbGroups[0][0];
+  displayInfinitive.textContent = primerVerbo.infinitive;
+  displayPast.textContent = primerVerbo.past;
+  displayParticiple.textContent = primerVerbo.participle;
+  displayTranslation.textContent = `Significado: ${primerVerbo.meaning}`;
+  roundCounter.textContent = `Repetición 1 de ${MAX_ROUNDS}`;
+
+  renderGroupInfo();
+
+  // 4. Iniciar automáticamente la reproducción (El programa)
+  playRhythmicCycle();
 });
 
 restartRoundBtn.addEventListener("click", () => { restartRoundBtn.classList.add("hidden"); nextBlockBtn.classList.add("hidden"); playRhythmicCycle(); });
