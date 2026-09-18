@@ -144,8 +144,8 @@ let verbGroups = [
   ]
 ];
 
-// ==========================================
-// 2. VARIABLES Y DOM
+/// ==========================================
+// 2. VARIABLES Y ELEMENTOS DEL DOM
 // ==========================================
 let currentGroupIndex = 0;
 const MAX_ROUNDS = 5;
@@ -159,8 +159,6 @@ let isTransitioning = false;
 let verbPauseInterval = 450;
 let speechRate = 0.85;
 let currentSessionID = 0;
-
-// NUEVAS VARIABLES: Estado del Modo Continuo
 let modoContinuoActivado = false;
 
 const blockBadge = document.getElementById("blockBadge");
@@ -208,71 +206,57 @@ const participleInput = document.getElementById("participleInput");
 const checkAnswerBtn = document.getElementById("checkAnswerBtn");
 const textFeedback = document.getElementById("textFeedback");
 const showAnswerBtn = document.getElementById("showAnswerBtn");
-const silentAudio = document.getElementById("silentAudio");
 
-// Capturamos los nuevos controles
 const btnMezclar = document.getElementById('btn-mezclar');
 const toggleModoContinuo = document.getElementById('toggle-modo-continuo');
-
-// ==========================================
-// MANTENER AUDIO ACTIVO EN SEGUNDO PLANO (iOS)
-// ==========================================
-
-// Busca tu evento 'startAudioBtn.addEventListener' existente y modifícalo para que inicie el audio silencioso
-startAudioBtn.addEventListener("click", () => {
-  silentAudio.play().catch(e => console.log("Audio en segundo plano bloqueado", e));
-  startNewCycle();
-});
+const clearCacheBtn = document.getElementById("clearCacheBtn");
+const practiceMistakesBtn = document.getElementById("practiceMistakesBtn");
 
 // ==========================================
 // LIMPIEZA DE CACHÉ Y PRÁCTICA DE FALLOS
 // ==========================================
-const clearCacheBtn = document.getElementById("clearCacheBtn");
-const practiceMistakesBtn = document.getElementById("practiceMistakesBtn");
-
-clearCacheBtn.addEventListener("click", () => {
-  if (confirm("¿Estás seguro de querer borrar la caché y reiniciar la app? Esto solucionará problemas pero cerrará tu sesión actual.")) {
-    if ('serviceWorker' in navigator) {
-      caches.keys().then(keys => Promise.all(keys.map(key => caches.delete(key))));
-      navigator.serviceWorker.getRegistrations().then(regs => {
-        for (let reg of regs) reg.unregister();
-      });
+if (clearCacheBtn) {
+  clearCacheBtn.addEventListener("click", () => {
+    if (confirm("¿Estás seguro de querer borrar la caché y reiniciar la app? Esto solucionará problemas pero cerrará tu sesión actual.")) {
+      if ('serviceWorker' in navigator) {
+        caches.keys().then(keys => Promise.all(keys.map(key => caches.delete(key))));
+        navigator.serviceWorker.getRegistrations().then(regs => {
+          for (let reg of regs) reg.unregister();
+        });
+      }
+      localStorage.clear();
+      window.location.reload(true);
     }
-    localStorage.clear(); // Borra fallos y datos guardados
-    window.location.reload(true);
-  }
-});
+  });
+}
 
-practiceMistakesBtn.addEventListener("click", () => {
-  const mistakes = getMistakes();
-  const keys = Object.keys(mistakes);
+if (practiceMistakesBtn) {
+  practiceMistakesBtn.addEventListener("click", () => {
+    const mistakes = getMistakes();
+    const keys = Object.keys(mistakes);
 
-  if (keys.length === 0) {
-    alert("No tienes fallos registrados para practicar.");
-    return;
-  }
+    if (keys.length === 0) {
+      alert("No tienes fallos registrados para practicar.");
+      return;
+    }
 
-  // Aplanar todos los verbos y filtrar solo los que tienen fallos
-  let todosLosVerbos = verbGroups.flat();
-  let verbosAEstudiar = todosLosVerbos.filter(v => keys.includes(v.infinitive));
+    let todosLosVerbos = verbGroups.flat();
+    let verbosAEstudiar = todosLosVerbos.filter(v => keys.includes(v.infinitive));
 
-  // Dividirlos en bloques de 5 nuevamente
-  let nuevosGrupos = [];
-  for (let i = 0; i < verbosAEstudiar.length; i += 5) {
-    nuevosGrupos.push(verbosAEstudiar.slice(i, i + 5));
-  }
+    let nuevosGrupos = [];
+    for (let i = 0; i < verbosAEstudiar.length; i += 5) {
+      nuevosGrupos.push(verbosAEstudiar.slice(i, i + 5));
+    }
 
-  verbGroups = nuevosGrupos;
-  currentGroupIndex = 0;
-  mistakesModal.classList.remove("show");
+    verbGroups = nuevosGrupos;
+    currentGroupIndex = 0;
+    if (mistakesModal) mistakesModal.classList.remove("show");
 
-  renderGroupInfo();
-  alert("¡Modo de práctica activado! Se han creado bloques exclusivos con los verbos que más fallas.");
-});
+    renderGroupInfo();
+    alert("¡Modo de práctica activado! Se han creado bloques exclusivos con los verbos que más fallas.");
+  });
+}
 
-// ==========================================
-// NUEVA LÓGICA: Controles de Estudio
-// ==========================================
 if (toggleModoContinuo) {
   toggleModoContinuo.addEventListener('change', (e) => {
     modoContinuoActivado = e.target.checked;
@@ -280,48 +264,39 @@ if (toggleModoContinuo) {
 }
 
 // ==========================================
-// ACCIÓN: MEZCLAR VERBOS (Corregido para restaurar botones)
+// ACCIÓN: MEZCLAR VERBOS
 // ==========================================
 if (btnMezclar) {
   btnMezclar.addEventListener('click', () => {
-    // 1. Cancelar cualquier audio en curso y anular la sesión activa
     currentSessionID++;
     isPlaying = false;
     isPaused = false;
     window.speechSynthesis.cancel();
 
-    // 2. Ocultar los controles de audio en curso
     finishAudioPhase();
 
-    // 3. Restaurar los botones iniciales en la barra inferior
     startAudioBtn.classList.remove("hidden");
     restartRoundBtn.classList.add("hidden");
     nextBlockBtn.classList.add("hidden");
 
-    // 4. Asegurar que la vista esté en el visualizador y no en el Quiz
     testPanel.classList.add("hidden");
     visualizerCard.classList.remove("hidden");
 
-    // 5. Aplanar todos los verbos de todos los bloques en un solo arreglo
     let todosLosVerbos = [];
     verbGroups.forEach(grupo => {
       todosLosVerbos.push(...grupo);
     });
 
-    // 6. Mezclar de forma aleatoria con el algoritmo Fisher-Yates
     shuffleArray(todosLosVerbos);
 
-    // 7. Volver a segmentar en bloques de 5 verbos
     let nuevosGrupos = [];
     for (let i = 0; i < todosLosVerbos.length; i += 5) {
       nuevosGrupos.push(todosLosVerbos.slice(i, i + 5));
     }
 
-    // 8. Reasignar la base de datos y reiniciar al Bloque 1
     verbGroups = nuevosGrupos;
     currentGroupIndex = 0;
 
-    // 9. Actualizar la tarjeta visual con el primer verbo del nuevo bloque
     const primerVerbo = verbGroups[0][0];
     displayInfinitive.textContent = primerVerbo.infinitive;
     displayPast.textContent = primerVerbo.past;
@@ -329,14 +304,13 @@ if (btnMezclar) {
     displayTranslation.textContent = `Significado: ${primerVerbo.meaning}`;
     roundCounter.textContent = `Repetición 1 de ${MAX_ROUNDS}`;
 
-    // 10. Actualizar lista visual y mensaje de estado
     renderGroupInfo();
     statusMessage.textContent = "Verbos mezclados. ¡Listo para comenzar!";
   });
 }
 
 // ==========================================
-// 3. CONTROL DESLIZADOR INTUITIVO
+// 3. CONTROL DESLIZADOR DE VELOCIDAD
 // ==========================================
 pauseSlider.addEventListener("input", (e) => {
   const val = parseInt(e.target.value, 10);
@@ -404,7 +378,7 @@ async function speakVerbSequence(verb, sessionID) {
 }
 
 // ==========================================
-// 5. CICLO DE REPRODUCCIÓN (Modificado para Modo Continuo)
+// 5. CICLO DE REPRODUCCIÓN
 // ==========================================
 function renderGroupInfo() {
   const group = verbGroups[currentGroupIndex];
@@ -466,20 +440,19 @@ async function playRhythmicCycle() {
   if (isPlaying && mySessionID === currentSessionID) {
     finishAudioPhase();
 
-    // EVALUAMOS SI EL MODO CONTINUO ESTÁ ACTIVO
     if (modoContinuoActivado) {
       statusMessage.textContent = "Pasando al siguiente bloque (Modo Continuo)...";
       currentGroupIndex++;
 
       if (currentGroupIndex < verbGroups.length) {
-        setTimeout(() => { startNewCycle(); }, 1500); // Pequeña pausa antes de seguir
+        setTimeout(() => { startNewCycle(); }, 1500);
       } else {
         statusMessage.textContent = "¡Has completado todos los bloques en Modo Continuo!";
-        currentGroupIndex = 0; // Reinicia al primer bloque
+        currentGroupIndex = 0;
         restartRoundBtn.classList.remove("hidden");
       }
     } else {
-      iniciarTestModo(); // Flujo normal con Quiz
+      iniciarTestModo();
     }
   }
 }
@@ -512,7 +485,7 @@ function renderMistakes() {
 clearMistakesBtn.addEventListener("click", () => { localStorage.removeItem(STORAGE_KEY); renderMistakes(); });
 
 // =========================================================
-// 7. FUNCIONES DE FLEXIBILIDAD DE PRONUNCIACIÓN (Levenshtein)
+// 7. FLEXIBILIDAD DE PRONUNCIACIÓN (Levenshtein)
 // =========================================================
 function getLevenshteinDistance(a, b) {
   if (a.length === 0) return b.length;
@@ -541,13 +514,9 @@ function isCloseEnough(spokenPhrase, targetWord) {
   }
   return false;
 }
-Para inyectar ese "Efecto Mezclar" de limpieza profunda directamente en el flujo del test(sin que tus verbos se revuelvan), vamos a forzar la destrucción total de la memoria del micrófono(recognitionInstance = null) exactamente cuando pasas de una palabra a otra y cuando finaliza la escucha.
 
-Reemplaza por completo tu Sección 8 en app.js con este bloque.He añadido la limpieza nuclear en las funciones cargarPreguntaTest, registrarAcierto y en los eventos finales del micrófono.
-
-  JavaScript
 // ==========================================
-// 8. EVALUACIÓN (Teclado y Micrófono - Deep Reset iOS)
+// 8. EVALUACIÓN (Deep Reset iOS)
 // ==========================================
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition || window.mozSpeechRecognition;
 let recognitionInstance = null;
@@ -568,7 +537,6 @@ function cargarPreguntaTest() {
 
   window.speechSynthesis.cancel();
 
-  // EL EFECTO MEZCLAR: Destruimos la instancia zombi al cambiar de palabra
   if (recognitionInstance) {
     try { recognitionInstance.abort(); } catch (e) { }
     recognitionInstance = null;
@@ -594,7 +562,6 @@ function registrarAcierto(tiempoDeEspera = 1200) {
   isTransitioning = true;
   testVerbIndex++;
 
-  // EL EFECTO MEZCLAR: Apagamos y vaciamos la memoria al acertar
   if (recognitionInstance) {
     try { recognitionInstance.abort(); } catch (e) { }
     recognitionInstance = null;
@@ -618,7 +585,6 @@ function registrarAcierto(tiempoDeEspera = 1200) {
   }
 }
 
-// Validación Teclado
 checkAnswerBtn.addEventListener("click", () => {
   if (isTransitioning) return;
 
@@ -657,7 +623,6 @@ if (SpeechRecognition) {
 
     window.speechSynthesis.cancel();
 
-    // Candado para evitar que el doble toque rompa Safari
     if (isListening) {
       if (recognitionInstance) {
         try { recognitionInstance.abort(); } catch (e) { }
@@ -669,13 +634,11 @@ if (SpeechRecognition) {
       return;
     }
 
-    // Limpieza de seguridad antes de arrancar
     if (recognitionInstance) {
       try { recognitionInstance.abort(); } catch (e) { }
       recognitionInstance = null;
     }
 
-    // CREACIÓN DE INSTANCIA 100% LIMPIA EN CADA TOQUE
     recognitionInstance = new SpeechRecognition();
     recognitionInstance.lang = "en-US";
     recognitionInstance.continuous = false;
@@ -740,7 +703,6 @@ if (SpeechRecognition) {
     recognitionInstance.onend = () => {
       isListening = false;
       micBtn.classList.remove("listening");
-      // EL EFECTO MEZCLAR: Eliminamos la instancia de Safari al concluir
       recognitionInstance = null;
     };
 
@@ -768,13 +730,22 @@ if (SpeechRecognition) {
   micBtn.disabled = true;
   micStatus.textContent = "Micrófono no soportado en este navegador.";
 }
+
 // ==========================================
 // 9. EVENTOS GENERALES Y MODAL
 // ==========================================
 modeVoiceBtn.addEventListener("click", () => { inputMode = 'voice'; modeVoiceBtn.classList.add("active"); modeTextBtn.classList.remove("active"); voiceInputSection.classList.remove("hidden"); textInputSection.classList.add("hidden"); });
 modeTextBtn.addEventListener("click", () => { inputMode = 'text'; modeTextBtn.classList.add("active"); modeVoiceBtn.classList.remove("active"); textInputSection.classList.remove("hidden"); voiceInputSection.classList.add("hidden"); pastInput.focus(); });
 
-startAudioBtn.addEventListener("click", startNewCycle);
+// Control unificado y seguro de inicio de ritmo
+startAudioBtn.addEventListener("click", () => {
+  const silentAudioEl = document.getElementById("silentAudio");
+  if (silentAudioEl) {
+    silentAudioEl.play().catch(e => console.log("Audio en segundo plano bloqueado", e));
+  }
+  startNewCycle();
+});
+
 restartRoundBtn.addEventListener("click", () => { restartRoundBtn.classList.add("hidden"); nextBlockBtn.classList.add("hidden"); startNewCycle(); });
 nextBlockBtn.addEventListener("click", () => { currentGroupIndex++; restartRoundBtn.classList.add("hidden"); nextBlockBtn.classList.add("hidden"); startNewCycle(); });
 
