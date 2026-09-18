@@ -715,58 +715,60 @@ modeVoiceBtn.addEventListener("click", () => { inputMode = 'voice'; modeVoiceBtn
 modeTextBtn.addEventListener("click", () => { inputMode = 'text'; modeTextBtn.classList.add("active"); modeVoiceBtn.classList.remove("active"); textInputSection.classList.remove("hidden"); voiceInputSection.classList.add("hidden"); pastInput.focus(); });
 
 // ==========================================================
-// NUEVO BOTÓN "INICIAR RITMO" (Clon de Mezclar + Ejecución Automática)
+// NUEVO BOTÓN "INICIAR RITMO" (Clon de Mezclar + Ejecución Automática con IF)
 // ==========================================================
-startAudioBtn.addEventListener("click", () => {
-  // 1. Audio silencioso en segundo plano para iOS
-  const silentAudioEl = document.getElementById("silentAudio");
-  if (silentAudioEl) {
-    silentAudioEl.play().catch((e) => console.log("Audio en segundo plano bloqueado", e));
-  }
+if (startAudioBtn) {
+  startAudioBtn.addEventListener("click", () => {
+    // 1. Audio silencioso en segundo plano para iOS
+    const silentAudioEl = document.getElementById("silentAudio");
+    if (silentAudioEl) {
+      silentAudioEl.play().catch((e) => console.log("Audio en segundo plano bloqueado", e));
+    }
 
-  // 2. Limpieza idéntica al botón mezclar original
-  currentSessionID++;
-  isPlaying = false;
-  isPaused = false;
-  window.speechSynthesis.cancel();
-  finishAudioPhase();
+    // 2. Limpieza idéntica al botón mezclar original
+    currentSessionID++;
+    isPlaying = false;
+    isPaused = false;
+    window.speechSynthesis.cancel();
+    finishAudioPhase();
 
-  // Asegurar que la vista vuelve al estado inicial
-  startAudioBtn.classList.remove("hidden");
-  restartRoundBtn.classList.add("hidden");
-  nextBlockBtn.classList.add("hidden");
-  testPanel.classList.add("hidden");
-  visualizerCard.classList.remove("hidden");
+    // Asegurar que la vista vuelve al estado inicial
+    startAudioBtn.classList.remove("hidden");
+    restartRoundBtn.classList.add("hidden");
+    nextBlockBtn.classList.add("hidden");
+    testPanel.classList.add("hidden");
+    visualizerCard.classList.remove("hidden");
 
-  // 3. Mezclar todos los verbos globalmente
-  let todosLosVerbos = [];
-  verbGroups.forEach(grupo => {
-    todosLosVerbos.push(...grupo);
+    // 3. Mezclar todos los verbos globalmente
+    let todosLosVerbos = [];
+    verbGroups.forEach(grupo => {
+      todosLosVerbos.push(...grupo);
+    });
+
+    shuffleArray(todosLosVerbos);
+
+    let nuevosGrupos = [];
+    for (let i = 0; i < todosLosVerbos.length; i += 5) {
+      nuevosGrupos.push(todosLosVerbos.slice(i, i + 5));
+    }
+
+    verbGroups = nuevosGrupos;
+    currentGroupIndex = 0;
+
+    // Actualizar tarjetas visuales
+    const primerVerbo = verbGroups[0][0];
+    displayInfinitive.textContent = primerVerbo.infinitive;
+    displayPast.textContent = primerVerbo.past;
+    displayParticiple.textContent = primerVerbo.participle;
+    displayTranslation.textContent = `Significado: ${primerVerbo.meaning}`;
+    roundCounter.textContent = `Repetición 1 de ${MAX_ROUNDS}`;
+
+    renderGroupInfo();
+
+    // 4. Iniciar automáticamente la reproducción (El programa)
+    playRhythmicCycle();
   });
-
-  shuffleArray(todosLosVerbos);
-
-  let nuevosGrupos = [];
-  for (let i = 0; i < todosLosVerbos.length; i += 5) {
-    nuevosGrupos.push(todosLosVerbos.slice(i, i + 5));
-  }
-
-  verbGroups = nuevosGrupos;
-  currentGroupIndex = 0;
-
-  // Actualizar tarjetas visuales
-  const primerVerbo = verbGroups[0][0];
-  displayInfinitive.textContent = primerVerbo.infinitive;
-  displayPast.textContent = primerVerbo.past;
-  displayParticiple.textContent = primerVerbo.participle;
-  displayTranslation.textContent = `Significado: ${primerVerbo.meaning}`;
-  roundCounter.textContent = `Repetición 1 de ${MAX_ROUNDS}`;
-
-  renderGroupInfo();
-
-  // 4. Iniciar automáticamente la reproducción (El programa)
-  playRhythmicCycle();
-});
+}
 
 restartRoundBtn.addEventListener("click", () => { restartRoundBtn.classList.add("hidden"); nextBlockBtn.classList.add("hidden"); playRhythmicCycle(); });
 nextBlockBtn.addEventListener("click", () => { currentGroupIndex++; restartRoundBtn.classList.add("hidden"); nextBlockBtn.classList.add("hidden"); playRhythmicCycle(); });
