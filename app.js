@@ -264,7 +264,7 @@ if (toggleModoContinuo) {
 }
 
 // ==========================================
-// ACCIÓN: MEZCLAR VERBOS MANUAL (Mantenido por si existe en HTML)
+// ACCIÓN: MEZCLAR VERBOS (Boton Manual Antiguo)
 // ==========================================
 if (btnMezclar) {
   btnMezclar.addEventListener('click', () => {
@@ -272,7 +272,15 @@ if (btnMezclar) {
     isPlaying = false;
     isPaused = false;
     window.speechSynthesis.cancel();
+
     finishAudioPhase();
+
+    startAudioBtn.classList.remove("hidden");
+    restartRoundBtn.classList.add("hidden");
+    nextBlockBtn.classList.add("hidden");
+
+    testPanel.classList.add("hidden");
+    visualizerCard.classList.remove("hidden");
 
     let todosLosVerbos = [];
     verbGroups.forEach(grupo => {
@@ -288,8 +296,16 @@ if (btnMezclar) {
 
     verbGroups = nuevosGrupos;
     currentGroupIndex = 0;
+
+    const primerVerbo = verbGroups[0][0];
+    displayInfinitive.textContent = primerVerbo.infinitive;
+    displayPast.textContent = primerVerbo.past;
+    displayParticiple.textContent = primerVerbo.participle;
+    displayTranslation.textContent = `Significado: ${primerVerbo.meaning}`;
+    roundCounter.textContent = `Repetición 1 de ${MAX_ROUNDS}`;
+
     renderGroupInfo();
-    statusMessage.textContent = "Verbos mezclados manualmente.";
+    statusMessage.textContent = "Verbos mezclados. ¡Listo para comenzar!";
   });
 }
 
@@ -362,7 +378,7 @@ async function speakVerbSequence(verb, sessionID) {
 }
 
 // ==========================================
-// 5. CICLO DE REPRODUCCIÓN GLOBAL
+// 5. CICLO DE REPRODUCCIÓN Y MEZCLA GLOBAL
 // ==========================================
 function renderGroupInfo() {
   const group = verbGroups[currentGroupIndex];
@@ -382,6 +398,26 @@ function shuffleArray(array) {
     const temp = array[i]; array[i] = array[j]; array[j] = temp;
   }
   return array;
+}
+
+// NUEVA LÓGICA GLOBAL INTEGRADA: Mezcla todos los verbos antes de cada inicio
+async function startNewCycle() {
+  let todosLosVerbos = [];
+  verbGroups.forEach((grupo) => {
+    todosLosVerbos.push(...grupo);
+  });
+
+  shuffleArray(todosLosVerbos);
+
+  let nuevosGrupos = [];
+  for (let i = 0; i < todosLosVerbos.length; i += 5) {
+    nuevosGrupos.push(todosLosVerbos.slice(i, i + 5));
+  }
+
+  verbGroups = nuevosGrupos;
+  currentGroupIndex = 0;
+
+  await playRhythmicCycle();
 }
 
 async function playRhythmicCycle() {
@@ -525,8 +561,10 @@ function iniciarTestModo() {
   statusMessage.textContent = "Evaluación de retención";
   testVerbIndex = 0;
 
+  // Apagado total de síntesis de voz para soltar el hardware
   window.speechSynthesis.cancel();
 
+  // Recreación fresca de la instancia del micrófono
   if (SpeechRecognition) {
     if (recognition) {
       try { recognition.abort(); } catch (e) { }
@@ -697,41 +735,19 @@ showAnswerBtn.addEventListener("click", () => {
 modeVoiceBtn.addEventListener("click", () => { inputMode = 'voice'; modeVoiceBtn.classList.add("active"); modeTextBtn.classList.remove("active"); voiceInputSection.classList.remove("hidden"); textInputSection.classList.add("hidden"); });
 modeTextBtn.addEventListener("click", () => { inputMode = 'text'; modeTextBtn.classList.add("active"); modeVoiceBtn.classList.remove("active"); textInputSection.classList.remove("hidden"); voiceInputSection.classList.add("hidden"); pastInput.focus(); });
 
-// ==========================================================
-// EVENTO PRINCIPAL: EL "NUEVO" BOTÓN INICIAR RITMO (Mezclar + Iniciar)
-// ==========================================================
+// EVENTO DE INICIO UNIFICADO: Mezcla global + limpieza de audio
 startAudioBtn.addEventListener("click", () => {
-  // 1. Hack de audio silencioso
+  currentSessionID++;
+  isPlaying = false;
+  isPaused = false;
+  window.speechSynthesis.cancel();
+
   const silentAudioEl = document.getElementById("silentAudio");
   if (silentAudioEl) {
     silentAudioEl.play().catch((e) => console.log("Audio en segundo plano bloqueado", e));
   }
 
-  // 2. Limpieza de procesos (Igual que el botón mezclar)
-  currentSessionID++;
-  isPlaying = false;
-  isPaused = false;
-  window.speechSynthesis.cancel();
-  finishAudioPhase();
-
-  // 3. Mezclar todos los verbos globalmente (Igual que el botón mezclar)
-  let todosLosVerbos = [];
-  verbGroups.forEach(grupo => {
-    todosLosVerbos.push(...grupo);
-  });
-
-  shuffleArray(todosLosVerbos);
-
-  let nuevosGrupos = [];
-  for (let i = 0; i < todosLosVerbos.length; i += 5) {
-    nuevosGrupos.push(todosLosVerbos.slice(i, i + 5));
-  }
-
-  verbGroups = nuevosGrupos;
-  currentGroupIndex = 0;
-
-  // 4. Iniciar el programa automáticamente
-  playRhythmicCycle();
+  startNewCycle();
 });
 
 restartRoundBtn.addEventListener("click", () => { restartRoundBtn.classList.add("hidden"); nextBlockBtn.classList.add("hidden"); playRhythmicCycle(); });
